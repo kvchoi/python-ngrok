@@ -3,21 +3,22 @@
 # 建议Python 2.7.9 或 Python 3.4.2 以上运行
 # 项目地址: https://github.com/hauntek/python-ngrok
 # Version: v1.5
+import json
+import logging
+import os
+import random
 import socket
 import ssl
-import json
 import struct
-import random
 import sys
-import time
-import logging
 import threading
+import time
 
-host = 'tunnel.qydev.com' # Ngrok服务器地址
-port = 4443 # 端口
-bufsize = 1024 # 吞吐量
+host = 'tunnel.qydev.com'  # Ngrok服务器地址
+port = 4443  # 端口
+bufsize = 1024  # 吞吐量
 
-Tunnels = list() # 全局渠道赋值
+Tunnels = list()  # 全局渠道赋值
 body = dict()
 body['protocol'] = 'http'
 body['hostname'] = 'www.xxx.com'
@@ -25,7 +26,7 @@ body['subdomain'] = ''
 body['rport'] = 0
 body['lhost'] = '127.0.0.1'
 body['lport'] = 80
-Tunnels.append(body) # 加入渠道队列
+Tunnels.append(body)  # 加入渠道队列
 
 body = dict()
 body['protocol'] = 'http'
@@ -34,7 +35,7 @@ body['subdomain'] = 'xxx'
 body['rport'] = 0
 body['lhost'] = '127.0.0.1'
 body['lport'] = 80
-Tunnels.append(body) # 加入渠道队列
+Tunnels.append(body)  # 加入渠道队列
 
 body = dict()
 body['protocol'] = 'tcp'
@@ -43,7 +44,7 @@ body['subdomain'] = ''
 body['rport'] = 55499
 body['lhost'] = '127.0.0.1'
 body['lport'] = 22
-Tunnels.append(body) # 加入渠道队列
+Tunnels.append(body)  # 加入渠道队列
 
 reqIdaddr = dict()
 localaddr = dict()
@@ -54,10 +55,10 @@ if len(sys.argv) >= 2:
     try:
         all_the_text = file_object.read()
         config_object = json.loads(all_the_text)
-        host = config_object["server"]["host"] # Ngrok服务器地址
-        port = int(config_object["server"]["port"]) # 端口
-        bufsize = int(config_object["server"]["bufsize"]) # 吞吐量
-        Tunnels = list() # 重置渠道赋值
+        host = config_object["server"]["host"]  # Ngrok服务器地址
+        port = int(config_object["server"]["port"])  # 端口
+        bufsize = int(config_object["server"]["bufsize"])  # 吞吐量
+        Tunnels = list()  # 重置渠道赋值
         for Tunnel in config_object["client"]:
             body = dict()
             body['protocol'] = Tunnel["protocol"]
@@ -66,7 +67,7 @@ if len(sys.argv) >= 2:
             body['rport'] = int(Tunnel["rport"])
             body['lhost'] = Tunnel["lhost"]
             body['lport'] = int(Tunnel["lport"])
-            Tunnels.append(body) # 加入渠道队列
+            Tunnels.append(body)  # 加入渠道队列
         del all_the_text
         del config_object
     except Exception:
@@ -81,6 +82,7 @@ mainsocket = 0
 
 ClientId = ''
 pingtime = 0
+
 
 def getloacladdr(Tunnels, Url):
     protocol = Url[0:Url.find(':')]
@@ -101,6 +103,7 @@ def getloacladdr(Tunnels, Url):
 
     return dict()
 
+
 def dnsopen(host):
     try:
         ip = socket.gethostbyname(host)
@@ -108,6 +111,7 @@ def dnsopen(host):
         return False
 
     return ip
+
 
 def connectremote(host, port):
     try:
@@ -119,22 +123,30 @@ def connectremote(host, port):
         logger = logging.getLogger('%s:%d' % ('Conn', ssl_client.fileno()))
         logger.debug('New connection to: %s:%d' % (host, port))
     except socket.error:
+        logger = logging.getLogger('%s:%d' % ('Conn', ssl_client.fileno()))
+        logger.error('Fail to connection to %s:%d' % (host, port))
         return False
 
     return ssl_client
+
 
 def connectlocal(localhost, localport):
     try:
         localhost = socket.gethostbyname(localhost)
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if localport == 443 or localport == 8443:
+            client = ssl.wrap_socket(client, ssl_version=ssl.PROTOCOL_SSLv23)
         client.connect((localhost, localport))
         client.setblocking(1)
         logger = logging.getLogger('%s:%d' % ('Conn', client.fileno()))
         logger.debug('New connection to: %s:%d' % (localhost, localport))
-    except socket.error:
+    except socket.error as msg:
+        logger = logging.getLogger('%s:%d' % ('Conn', client.fileno()))
+        logger.error('Fail to connection to %s:%d for %s' % (localhost, localport, msg))
         return False
 
     return client
+
 
 def NgrokAuth():
     Payload = dict()
@@ -149,7 +161,8 @@ def NgrokAuth():
     body['Type'] = 'Auth'
     body['Payload'] = Payload
     buffer = json.dumps(body)
-    return(buffer)
+    return (buffer)
+
 
 def ReqTunnel(ReqId, Protocol, Hostname, Subdomain, RemotePort):
     Payload = dict()
@@ -163,7 +176,8 @@ def ReqTunnel(ReqId, Protocol, Hostname, Subdomain, RemotePort):
     body['Type'] = 'ReqTunnel'
     body['Payload'] = Payload
     buffer = json.dumps(body)
-    return(buffer)
+    return (buffer)
+
 
 def RegProxy(ClientId):
     Payload = dict()
@@ -172,7 +186,8 @@ def RegProxy(ClientId):
     body['Type'] = 'RegProxy'
     body['Payload'] = Payload
     buffer = json.dumps(body)
-    return(buffer)
+    return (buffer)
+
 
 def Ping():
     Payload = dict()
@@ -180,19 +195,22 @@ def Ping():
     body['Type'] = 'Ping'
     body['Payload'] = Payload
     buffer = json.dumps(body)
-    return(buffer)
+    return (buffer)
+
 
 def lentobyte(len):
     return struct.pack('<LL', len, 0)
 
-def sendbuf(sock, buf, isblock = False):
+
+def sendbuf(sock, buf, isblock=False):
     if isblock:
         sock.setblocking(1)
     sock.sendall(buf)
     if isblock:
         sock.setblocking(0)
 
-def sendpack(sock, msg, isblock = False):
+
+def sendpack(sock, msg, isblock=False):
     if isblock:
         sock.setblocking(1)
     sock.sendall(lentobyte(len(msg)) + msg.encode('utf-8'))
@@ -201,17 +219,20 @@ def sendpack(sock, msg, isblock = False):
     if isblock:
         sock.setblocking(0)
 
+
 def tolen(v):
     if len(v) == 8:
         return struct.unpack('<II', v)[0]
     return 0
 
+
 def getRandChar(length):
     _chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz"
     return ''.join(random.sample(_chars, length))
 
+
 # 客户端程序处理过程
-def HKClient(sock, linkstate, type, tosock = None):
+def HKClient(sock, linkstate, type, tosock=None):
     global mainsocket
     global ClientId
     global pingtime
@@ -251,7 +272,7 @@ def HKClient(sock, linkstate, type, tosock = None):
                         if js['Type'] == 'ReqProxy':
                             newsock = connectremote(host, port)
                             if newsock:
-                                thread = threading.Thread(target = HKClient, args = (newsock, 0, 2))
+                                thread = threading.Thread(target=HKClient, args=(newsock, 0, 2))
                                 thread.setDaemon(True)
                                 thread.start()
                         if js['Type'] == 'AuthResp':
@@ -262,7 +283,8 @@ def HKClient(sock, linkstate, type, tosock = None):
                             pingtime = time.time()
                             for info in Tunnels:
                                 reqid = getRandChar(8)
-                                sendpack(sock, ReqTunnel(reqid, info['protocol'], info['hostname'], info['subdomain'], info['rport']))
+                                sendpack(sock, ReqTunnel(reqid, info['protocol'], info['hostname'], info['subdomain'],
+                                                         info['rport']))
                                 reqIdaddr[reqid] = (info['lhost'], info['lport'])
                         if js['Type'] == 'NewTunnel':
                             if js['Payload']['Error'] != '':
@@ -279,7 +301,7 @@ def HKClient(sock, linkstate, type, tosock = None):
 
                             newsock = connectlocal(localhost, localport)
                             if newsock:
-                                thread = threading.Thread(target = HKClient, args = (newsock, 0, 3, sock))
+                                thread = threading.Thread(target=HKClient, args=(newsock, 0, 3, sock))
                                 thread.setDaemon(True)
                                 thread.start()
                                 tosock = newsock
@@ -318,9 +340,31 @@ def HKClient(sock, linkstate, type, tosock = None):
     logger.debug('Closing')
     sock.close()
 
+
+def checkPidRunning(pid):
+    '''Check For the existence of a unix pid.
+    '''
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    else:
+        return True
+
+
 # 客户端程序初始化
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s', datefmt='%Y/%m/%d %H:%M:%S')
+    pid = str(os.getpid())
+    pidfile = os.path.join(os.getcwd(), "python-ngrok.pid")
+    if os.path.isfile(pidfile) and checkPidRunning(int(file(pidfile, 'r').readlines()[0])):
+        print "%s already exists, exiting" % pidfile
+        sys.exit()
+    else:
+        print "new instance create, pid=%s" % pid
+        file(pidfile, 'w').write(pid)
+
+    logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s',
+                        datefmt='%Y/%m/%d %H:%M:%S')
     logger = logging.getLogger('%s' % 'client')
     logger.info('python-ngrok v1.5')
     while True:
@@ -339,7 +383,7 @@ if __name__ == '__main__':
                     logger.info('connect failed...!')
                     time.sleep(10)
                     continue
-                thread = threading.Thread(target = HKClient, args = (mainsocket, 0, 1))
+                thread = threading.Thread(target=HKClient, args=(mainsocket, 0, 1))
                 thread.setDaemon(True)
                 thread.start()
 
