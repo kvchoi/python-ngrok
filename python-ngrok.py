@@ -360,7 +360,7 @@ if __name__ == '__main__':
         print "%s already exists, exiting" % pidfile
         sys.exit()
     else:
-        print "new instance create, pid=%s" % pid
+        print "New python-ngrok instance create, pid=%s" % pid
         file(pidfile, 'w').write(pid)
 
     logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s',
@@ -397,4 +397,6 @@ if __name__ == '__main__':
         except socket.error:
             pingtime = 0
         except KeyboardInterrupt:
+            print "Python-ngrok instance exist, pid=%s" % pid
+            os.unlink(pidfile)
             sys.exit()
